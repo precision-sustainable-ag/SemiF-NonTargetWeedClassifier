@@ -16,6 +16,7 @@ predict:
   batch_prefix: MD
   image_folder: /mnt/research-projects/s/screberg/longterm_images/semifield-cutouts
   output_folder: predictions_test
+  sample_folder_count: 10
   
   model_path: runs/classify/MD_covers/batch8_imgsz128_1030_n/weights/best.pt
   labels:
