@@ -16,12 +16,10 @@ log = logging.getLogger(__name__)
 def run_LABEL(cfg: DictConfig) -> None:
     cfg = OmegaConf.create(cfg)
     log.info(f"Starting task {','.join(cfg.tasks)}")
-    
     for tsk in cfg.tasks:
         try:
             task = get_method(f"{tsk}.main")
             task(cfg)
-
         except Exception as e:
             log.exception("Failed")
             return None

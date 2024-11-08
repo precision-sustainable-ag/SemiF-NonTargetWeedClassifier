@@ -171,3 +171,4 @@ predictions/*
 predictions_test/*
 runs/*
 non_target_weeds/*
+hydra_logs/*

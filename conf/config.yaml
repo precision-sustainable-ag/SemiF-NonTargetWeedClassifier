@@ -1,0 +1,27 @@
+hydra:
+  run:
+    dir: hydra_logs/${now:%Y-%m-%d_%H_%M_%S}
+  # used for multi-runs -> maybe useful
+  # sweep:
+  #   dir: main_dir
+  #   subdir: ${hydra.job.name}
+tasks:
+  - predict
+  # - move_cutouts
+  # - synthesize
+
+predict:
+  start_date: 2023-09-18
+  end_date: 2024-05-16
+  batch_prefix: MD
+  image_folder: /mnt/research-projects/s/screberg/longterm_images/semifield-cutouts
+  output_folder: predictions_test
+  
+  model_path: runs/classify/MD_covers/batch8_imgsz128_1030_n/weights/best.pt
+  labels:
+    0: broadleaf
+    1: grass
+    2: hairy_vetch
+    3: non_target
+  parallel_inference: True
+  inference_batch_size: 256

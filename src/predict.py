@@ -1,11 +1,15 @@
 from ultralytics import YOLO
 from pathlib import Path
 import shutil
+import logging
 import random
 import numpy as np
 from tqdm import tqdm
 import pandas as pd
 from datetime import datetime
+
+log = logging.getLogger(__name__)
+
 
 class ImageBatchProcessor:
     def __init__(self, image_folder, batch_prefix, start_date, end_date):
@@ -90,12 +94,13 @@ class PredictionSaver:
 
 
 class BatchInferencePipeline:
-    def __init__(self, image_folder, batch_prefix, model_path, label_map, output_folder, date_range, parallel_processing):
+    def __init__(self, image_folder, batch_prefix, model_path, label_map, output_folder, date_range, parallel_processing, batch_size):
         self.processor = ImageBatchProcessor(image_folder, batch_prefix, *date_range)
         self.predictor = WeedPredictor(model_path, label_map)
         self.saver = PredictionSaver(output_folder)
         self.predicted_rows = []
         self.parallel_processing = parallel_processing
+        self.batch_size = batch_size
 
     def run(self):
         self.processor.load_batches()
@@ -106,7 +111,7 @@ class BatchInferencePipeline:
             images = []
             df['img_path'] = df.apply(lambda row: self.processor.image_folder / row['batch_id'] / f"{row['cutout_id']}.jpg", axis=1)
             images = df['img_path'].tolist()
-            results = self.predictor.batch_predict(images, 512)
+            results = self.predictor.batch_predict(images, self.batch_size)
             for record, result in zip(df.iterrows(), results):
                 row = record[1]
                 target_class, confidence = result
@@ -144,24 +149,39 @@ class BatchInferencePipeline:
         output_filename = self.saver.output_folder / f"prediction_batches_{timestamp}.csv"
         pd.DataFrame(self.predicted_rows).to_csv(output_filename, index=False)
 
+def main(cfg):
+    process_config = cfg['predict']
+    pipeline = BatchInferencePipeline(
+        image_folder=process_config['image_folder'],
+        batch_prefix=process_config['batch_prefix'],
+        model_path=process_config['model_path'],
+        label_map=process_config['labels'],
+        output_folder=process_config['output_folder'],
+        date_range=(process_config['start_date'], process_config['end_date']),
+        parallel_processing=process_config['parallel_inference'],
+        batch_size=process_config['inference_batch_size']
+    )
+
+    pipeline.run()
+
 
 # Usage example
-pipeline = BatchInferencePipeline(
-    image_folder="/mnt/research-projects/s/screberg/longterm_images/semifield-cutouts",
-    batch_prefix="MD",
-    model_path="runs/classify/MD_covers/batch8_imgsz128_1030_n/weights/best.pt",
-    label_map={
-        0: "broadleaf",
-        1: "grass",
-        2: "hairy_vetch",
-        3: "non_target"
-    },
-    output_folder="predictions_test",
-    date_range=('2023-09-18', '2024-05-16'),
-    parallel_processing=True
-    # date_range=("2022-10-12", "2023-05-20")
+# pipeline = BatchInferencePipeline(
+#     image_folder="/mnt/research-projects/s/screberg/longterm_images/semifield-cutouts",
+#     batch_prefix="MD",
+#     model_path="runs/classify/MD_covers/batch8_imgsz128_1030_n/weights/best.pt",
+#     label_map={
+#         0: "broadleaf",
+#         1: "grass",
+#         2: "hairy_vetch",
+#         3: "non_target"
+#     },
+#     output_folder="predictions_test",
+#     date_range=('2023-09-18', '2024-05-16'),
+#     parallel_processing=True
+#     # date_range=("2022-10-12", "2023-05-20")
 
-)
-start_time = datetime.now()
-pipeline.run()
-print(f"DONE. Time: {datetime.now() - start_time}")
+# )
+# start_time = datetime.now()
+# pipeline.run()
+# print(f"DONE. Time: {datetime.now() - start_time}")
