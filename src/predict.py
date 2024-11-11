@@ -1,3 +1,15 @@
+"""
+This script performs batch predictions on image data leveraging a "teacher" classification model
+to classify images into target and non-target categories. Predicted images are organized 
+into specific confidence intervals, enabling the identification of low-confidence or challenging 
+cases for distinguishing between target and non-target weeds.
+
+The categorized images can later be validated and labeled using the image_labeler.py script. 
+This approach is useful for dataset curation, as it allows a focused review 
+of ambiguous or hard-to-classify cases, enhancing the dataset by identifying examples that 
+are harder to predict and might need further attention for labeling, particularly for non-target weeds.
+"""
+
 from ultralytics import YOLO
 from pathlib import Path
 import shutil
@@ -12,6 +24,24 @@ log = logging.getLogger(__name__)
 
 
 class ImageBatchProcessor:
+    """
+    A class to handle loading and filtering image batches based on specified date range
+    and batch prefix.
+
+    Attributes:
+        image_folder (Path): Path to the folder containing image batches.
+        batch_prefix (str): Prefix used to identify relevant batches.
+        start_date (datetime): Start date for filtering batches.
+        end_date (datetime): End date for filtering batches.
+        sample_size (int): Number of batches to sample.
+        df (DataFrame): DataFrame storing the concatenated image data from sampled batches.
+
+    Methods:
+        load_batches(): Loads and samples image batches based on the specified date range
+            and batch prefix, concatenating the results into a DataFrame.
+        get_data(): Returns the loaded and filtered DataFrame containing image data.
+    """
+
     def __init__(self, image_folder, batch_prefix, start_date, end_date, sample_size):
         self.image_folder = Path(image_folder)
         self.batch_prefix = batch_prefix
@@ -45,6 +75,18 @@ class ImageBatchProcessor:
 
 
 class WeedPredictor:
+    """
+    A class to perform weed prediction using a "teacher" YOLO model.
+
+    Attributes:
+        model (YOLO): YOLO model instance for image prediction.
+        label_map (dict): Dictionary mapping class indices to class names.
+
+    Methods:
+        predict(img_path): Predicts the class and confidence for a single image.
+        batch_predict(images, batch_size): Predicts classes and confidences for a batch of images.
+    """
+    
     def __init__(self, model_path, label_map):
         self.model = YOLO(model_path)
         self.label_map = label_map
@@ -75,6 +117,16 @@ class WeedPredictor:
         return results
 
 class PredictionSaver:
+    """
+    A class to save image predictions by organizing them based on confidence score ranges.
+
+    Attributes:
+        output_folder (Path): Path to the folder where predictions are saved.
+
+    Methods:
+        save_prediction(img_path, confidence, target_class): Saves the image prediction
+            to a specific subfolder based on the confidence score and target class.
+    """
     def __init__(self, output_folder):
         self.output_folder = Path(output_folder)
         self.output_folder.mkdir(exist_ok=True, parents=True)
@@ -94,6 +146,23 @@ class PredictionSaver:
 
 
 class BatchInferencePipeline:
+    """
+    Integrates image loading, prediction, and saving results.
+
+    Attributes:
+        processor (ImageBatchProcessor): Instance for loading and filtering image batches.
+        predictor (WeedPredictor): Instance for predicting weed presence in images.
+        saver (PredictionSaver): Instance for saving predictions based on confidence scores.
+        predicted_rows (list): List to store prediction results for each image.
+        parallel_processing (bool): Flag to enable parallel processing of predictions.
+        batch_size (int): Batch size for predictions.
+        sample_size (int): Number of batches to sample.
+
+    Methods:
+        run(): Executes the entire pipeline, loading images, predicting, and saving results.
+        save_results(): Saves prediction results to a CSV file and returns the file path.
+    """
+
     def __init__(self, image_folder, batch_prefix, model_path, label_map, output_folder, date_range, parallel_processing, batch_size, sample_size):
         self.processor = ImageBatchProcessor(image_folder, batch_prefix, *date_range, sample_size)
         self.predictor = WeedPredictor(model_path, label_map)
@@ -156,6 +225,12 @@ class BatchInferencePipeline:
         return output_filename
 
 def main(cfg):
+    """
+    Main function to execute the batch inference pipeline based on configuration settings in conf/config.yaml. Uses hydra
+
+    Args:
+        cfg (dict): Configuration dictionary containing pipeline settings.
+    """
     start_time = datetime.now()
 
     process_config = cfg['predict']
@@ -173,25 +248,3 @@ def main(cfg):
     results = pipeline.run()
     log.info(f"Processing complete. Time spent: {datetime.now() - start_time}")
     log.info(f"Labels generated and saved to {results}")
-
-
-# Usage example
-# pipeline = BatchInferencePipeline(
-#     image_folder="/mnt/research-projects/s/screberg/longterm_images/semifield-cutouts",
-#     batch_prefix="MD",
-#     model_path="runs/classify/MD_covers/batch8_imgsz128_1030_n/weights/best.pt",
-#     label_map={
-#         0: "broadleaf",
-#         1: "grass",
-#         2: "hairy_vetch",
-#         3: "non_target"
-#     },
-#     output_folder="predictions_test",
-#     date_range=('2023-09-18', '2024-05-16'),
-#     parallel_processing=True
-#     # date_range=("2022-10-12", "2023-05-20")
-
-# )
-# start_time = datetime.now()
-# pipeline.run()
-# print(f"DONE. Time: {datetime.now() - start_time}")
