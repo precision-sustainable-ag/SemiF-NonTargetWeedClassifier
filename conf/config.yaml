@@ -26,3 +26,8 @@ predict:
     3: non_target
   parallel_inference: True
   inference_batch_size: 256
+
+  image_curation_labeler:
+    target_class: #
+    conf_min: .15
+    conf_max: .3
