@@ -155,7 +155,7 @@ def main(cfg):
     season = task_config['season']
     batch_prefix = task_config['batch_prefix']
     sample_size = task_config['sample_folder_count']
-    data_folder = Path(os.path.join(task_config['parent_output_folder'], f"{batch_prefix}_{season}"))
+    data_folder = Path(os.path.join(task_config['parent_output_folder'], f"{batch_prefix.lower()}_{season}"))
     start_date = task_config['start_date']
     end_date = task_config['end_date']
     
@@ -184,17 +184,18 @@ def main(cfg):
     
     log.info(f"Size of df before filtering: {len(df)}")
     exit()
-    df = filter_by_season(df, season)
-    log.info(f"Size of df after filtering: {len(df)}")
 
-    df = stratified_sample(df, n_samples_per_bin=20, max_bins=6)
+    # df = filter_by_season(df, season)
+    # log.info(f"Size of df after filtering: {len(df)}")
 
-    if len(df) == 0:
-        print("No images to process")
-        exit()
+    # df = stratified_sample(df, n_samples_per_bin=20, max_bins=6)
+
+    # if len(df) == 0:
+    #     print("No images to process")
+    #     exit()
     
-    log.info(f"Processing {len(df)} images")
-    image_viewer(df, image_folder, data_folder)
+    # log.info(f"Processing {len(df)} images")
+    # image_viewer(df, image_folder, data_folder)
 
 
 

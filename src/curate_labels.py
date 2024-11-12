@@ -136,10 +136,13 @@ def main(cfg):
 
     # remove already processed labels
     # df still doesn't have any definition
-    output_csvs = [x for x in Path(data_folder).rglob("*.csv")]
+    output_csvs = [x for x in Path(labels_folder).rglob("*.csv")]
     if output_csvs:
         labeled_df = pd.concat([pd.read_csv(csv) for csv in output_csvs], ignore_index=True)
         df = df[~df["cutout_id"].isin(labeled_df["cutout_id"])]
+    
+    # log.info(f"Processing {len(df)} images")
+    # image_viewer(df, image_folder, output_folder)
     
 
 if __name__ == "__main__":
