@@ -6,9 +6,9 @@ hydra:
   #   dir: main_dir
   #   subdir: ${hydra.job.name}
 tasks:
-  - label_images
+  # - label_images
   # - predict
-  # - curate_labels
+  - curate_labels
   # - train
 
 label_images:
@@ -37,7 +37,9 @@ predict:
   parallel_inference: True
   inference_batch_size: 256
 
-image_curation_labeler:
-  target_class: #
-  conf_min: .15
-  conf_max: .3
+curate_labels:
+  data_folder: predictions_test
+  labels_folder: labels_test/md_cover
+  check_target_class: False
+  min_confidence: .15
+  max_confidence: .35

@@ -6,6 +6,9 @@ from datetime import datetime  # Import for timestamp
 import numpy as np
 from tqdm import tqdm
 import random
+import logging
+
+log = logging.getLogger(__name__)
 
 
 def get_dynamic_font_scale(image_height, image_width):
@@ -108,13 +111,42 @@ def image_viewer(df: pd.DataFrame, image_folder, output_folder):
     # Save results to CSV
     results.to_csv(output_csv, index=False)
 
+def main(cfg):
+    task_config = cfg['curate_labels']
+    
+    # check ../predictions_test vs predictions_test
+    data_folder = task_config['data_folder']
+    labels_folder = task_config['labels_folder']
+    check_target_folder = task_config['check_target_class']
+    min_conf = int(task_config['min_confidence']*100)
+    max_conf = int(task_config['max_confidence']*100)
+    
+    image_folders = []
+    for folder in [ x.parts[-1] for x in Path(data_folder).iterdir() if x.is_dir()]:
+        folder_parts = str(folder).split('_')
+        print(folder_parts)
+        if (check_target_folder and len(folder_parts) == 3) or (not check_target_folder and len(folder_parts) == 4):
+            if int(folder_parts[-2]) >= min_conf and int(folder_parts[-1]) <= max_conf:
+                image_folders.append(str(folder))
+        
+    log.info(f"Curating labels for images from {image_folders}")
+    image_folder = image_folders[0]
+    
+    cutout_ids = [x.stem for x in image_folder.glob("*.jpg")]
 
+    # remove already processed labels
+    # df still doesn't have any definition
+    output_csvs = [x for x in Path(data_folder).rglob("*.csv")]
+    if output_csvs:
+        labeled_df = pd.concat([pd.read_csv(csv) for csv in output_csvs], ignore_index=True)
+        df = df[~df["cutout_id"].isin(labeled_df["cutout_id"])]
+    
 
 if __name__ == "__main__":
     
     data_folder = Path("../predictions_test")
     
-    
+    # for all folders in data folders when they fall in range 
     image_folder = Path(data_folder, "non_target_class_35_50")
    
 
