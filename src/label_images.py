@@ -1,4 +1,5 @@
 import os
+import logging
 from pathlib import Path
 import cv2
 import pandas as pd
@@ -6,6 +7,8 @@ from datetime import datetime  # Import for timestamp
 import numpy as np
 from tqdm import tqdm
 import random
+
+log = logging.getLogger(__name__)
 
 def df_filter(df, image_folder):
     # Get list of images
@@ -140,63 +143,93 @@ def filter_by_season(df, keyword):
     """Filter rows where 'Seasons' column contains the word 'cover'."""
     return df[df["season"].str.contains(keyword, case=False, na=False)]
 
+def main(cfg):
+    """
+    Main function to label images based on configuration settings in conf/config.yaml. Uses hydra
 
-if __name__ == "__main__":
-    # Example usage
-    batch_prefix = "MD"
-
-    image_folder = Path("/mnt/research-projects/s/screberg/longterm_images/semifield-cutouts")
-    # image_folder = Path("/mnt/research-projects/s/screberg/GROW_DATA/semifield-cutouts")
+    Args:
+        cfg (dict): Configuration dictionary containing pipeline settings.
+    """
+    task_config = cfg['label_images']
+    image_folder = Path(task_config['image_folder'])
+    season = task_config['season']
+    batch_prefix = task_config['batch_prefix']
+    sample_size = task_config['sample_folder_count']
+    data_folder = Path(os.path.join(task_config['parent_output_folder'], f"{batch_prefix}_{season}"))
+    start_date = task_config['start_date']
+    end_date = task_config['end_date']
     
-
-    batches = [x for x in image_folder.glob("*") if batch_prefix in x.name]
     
-    print(f"Total number of batches before date filtering: {len(batches)}")
-    start_date = pd.to_datetime("2022-10-12")
-    end_date = pd.to_datetime("2023-05-20")
+    log.info("Loading batches")
+    batches = [x for x in image_folder.glob('*') if batch_prefix in x.stem and (pd.to_datetime(start_date) <= pd.to_datetime(x.stem.split('_')[1]) <= pd.to_datetime(end_date))]
+    if sample_size >= len(batches):
+        batch_sample = batches
+    else:
+        batch_sample = random.sample(batches, sample_size)
     
-    # Filter batches by date
-    filtered_batches = []
-    for batch in batches:
-        date_str = batch.name.split("_")[1]
-        batch_date = pd.to_datetime(date_str)
-        if start_date <= batch_date <= end_date:
-            filtered_batches.append(batch)
+    log.info(f"{len(batch_sample)} batches used from {len(batches)} batches available")
     
-    print(f"Total number of batches after date filtering: {len(filtered_batches)}")
-
-    batch_sample = random.sample(filtered_batches, 10 if len(filtered_batches) > 10 else len(filtered_batches))
-
-    # csvs = []
-    # for batch in tqdm(batch_sample):
-    #     csv = [x for x in batch.glob("*.csv")][0]
-    #     csvs.append(csv)
- 
-    data_folder = Path("../labels/md_covers")
-    csvs = [x for x in data_folder.rglob("*.csv")]
-    cutout_ids = [x.stem for x in image_folder.glob("*.jpg")]
-    df = pd.read_csv([x for x in data_folder.glob("*.csv")][0])
-    df = df[df["cutout_id"].isin(cutout_ids)]
-
-    
-    print(f"Size of df before filtering: {len(df)}")
-    
+    # should go here since it's possible this is the first usage
     data_folder.mkdir(exist_ok=True, parents=True)
-
-    # Load all CSV files into a single DataFrame
-    output_csvs = [x for x in output_folder.glob("*.csv")]
-
+    csvs = [x for x in data_folder.rglob("*.csv")]
+    if csvs:
+        # this codeblock gets all images from the first csv and keeps the cutouts if they are present in long term storage
+        cutout_ids = [x.stem for x in image_folder.glob("*.jpg")]
+        df = pd.read_csv([x for x in data_folder.glob("*.csv")][0])
+        df = df[df["cutout_id"].isin(cutout_ids)]
         
-    if output_csvs:
-        labeled_df = pd.concat([pd.read_csv(csv) for csv in output_csvs], ignore_index=True)
+        # this removes cutouts from the dataframe if they are present in data_folder
+        labeled_df = pd.concat([pd.read_csv(csv) for csv in csvs], ignore_index=True)
         df = df[~df["cutout_id"].isin(labeled_df["cutout_id"])]
+    
+    log.info(f"Size of df before filtering: {len(df)}")
+    exit()
+    df = filter_by_season(df, season)
+    log.info(f"Size of df after filtering: {len(df)}")
 
-    df = filter_by_season(df, "cover")
-    print(f"Size of df before filtering: {len(df)}")
     df = stratified_sample(df, n_samples_per_bin=20, max_bins=6)
+
     if len(df) == 0:
         print("No images to process")
         exit()
     
-    print(f"Processing {len(df)} images")
-    image_viewer(df, image_folder, output_folder)
+    log.info(f"Processing {len(df)} images")
+    image_viewer(df, image_folder, data_folder)
+
+
+
+# if __name__ == "__main__":
+#     # Example usage
+#     batch_prefix = "MD"
+
+#     image_folder = Path("/mnt/research-projects/s/screberg/longterm_images/semifield-cutouts")
+#     # image_folder = Path("/mnt/research-projects/s/screberg/GROW_DATA/semifield-cutouts")
+ 
+#     data_folder = Path("../labels/md_covers")
+#     csvs = [x for x in data_folder.rglob("*.csv")]
+#     cutout_ids = [x.stem for x in image_folder.glob("*.jpg")]
+#     df = pd.read_csv([x for x in data_folder.glob("*.csv")][0])
+#     df = df[df["cutout_id"].isin(cutout_ids)]
+
+    
+#     print(f"Size of df before filtering: {len(df)}")
+    
+#     data_folder.mkdir(exist_ok=True, parents=True)
+
+#     # Load all CSV files into a single DataFrame
+#     output_csvs = [x for x in data_folder.glob("*.csv")]
+
+        
+#     if output_csvs:
+#         labeled_df = pd.concat([pd.read_csv(csv) for csv in output_csvs], ignore_index=True)
+#         df = df[~df["cutout_id"].isin(labeled_df["cutout_id"])]
+
+#     df = filter_by_season(df, "cover")
+#     print(f"Size of df before filtering: {len(df)}")
+#     df = stratified_sample(df, n_samples_per_bin=20, max_bins=6)
+#     if len(df) == 0:
+#         print("No images to process")
+#         exit()
+    
+#     print(f"Processing {len(df)} images")
+#     image_viewer(df, image_folder, data_folder)

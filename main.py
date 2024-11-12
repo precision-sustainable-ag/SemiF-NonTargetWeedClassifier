@@ -1,3 +1,10 @@
+"""
+Task list:
+1. label_images - initial manual labelling of images (approx 1k) to train the labeling model
+2. predict - auto-labeling data to generate more data for training
+3. curate_images - check labeled images (can be auto-labeled by predict.py) and verify the quality
+4. train
+"""
 import logging
 import os
 import sys

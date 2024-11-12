@@ -191,6 +191,7 @@ class BatchInferencePipeline:
                     continue
                 target_class_label = self.predictor.label_map[target_class]
                 row["PredictedTargetWeed"] = True if target_class_label != "non_target" else False
+                row["PredictedTargetWeed_Confidence"] = confidence
                 
                 if confidence is not None:
                     self.saver.save_prediction(row['img_path'], confidence, target_class_label)
@@ -209,6 +210,7 @@ class BatchInferencePipeline:
 
                 target_class_label = self.predictor.label_map[target_class]
                 row["PredictedTargetWeed"] = True if target_class_label != "non_target" else False
+                row["PredictedTargetWeed_Confidence"] = confidence
                 
                 if confidence is not None:
                     self.saver.save_prediction(img_path, confidence, target_class_label)
