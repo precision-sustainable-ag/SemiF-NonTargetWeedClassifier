@@ -23,6 +23,12 @@ def get_dynamic_font_scale(image_height, image_width):
     else:
         return 1.5  # Larger font for larger images
 
+def get_folder_name(confidence_score, check_target_class):
+    conf_ranges = [(0.85, 0.95), (0.65, 0.85), (0.5, 0.65), (0.35, 0.5), (0.15, 0.35), (0, 0.15)]
+    for lower, upper in conf_ranges:
+        if lower <= confidence_score < upper:
+            target_type = "non_target" if not check_target_class else "target"
+            return f"{target_type}_class_{int(lower*100)}_{int(upper*100)}"
 
 def image_viewer(df: pd.DataFrame, image_folder, output_folder):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -38,7 +44,9 @@ def image_viewer(df: pd.DataFrame, image_folder, output_folder):
     for _, row in df.iterrows():
         batch_id = row["batch_id"]
         image_name = row["cutout_id"] + ".jpg"
-        image_path = Path(image_folder, image_name)
+        folder_name = get_folder_name(row["PredictedTargetWeed_Confidence"], row["PredictedTargetWeed"])
+        log.info(f"Folder name: {folder_name}")
+        image_path = Path(image_folder, folder_name, image_name)
         image = cv2.imread(image_path)
         if image is None:
             continue
@@ -74,7 +82,8 @@ def image_viewer(df: pd.DataFrame, image_folder, output_folder):
             cv2.putText(image, label, position, font, font_scale, color, thickness, cv2.LINE_AA)
 
         valid_input = False
-
+        
+        output_csv = os.path.join(output_folder, f"image_classes_{timestamp}.csv")
         while not valid_input:
             # Display the image with the label in the same window
             cv2.imshow(window_name, image)
@@ -94,7 +103,7 @@ def image_viewer(df: pd.DataFrame, image_folder, output_folder):
                 # Concatenate the current result with the main results DataFrame
                 results = pd.concat([results, current_result], ignore_index=True)
                 # Save results to CSV
-                output_csv = os.path.join(output_folder, f"image_classes_{timestamp}.csv")
+                
                 results.to_csv(output_csv, index=False)
                 print(f"Counter: {counter}, Image: {image_name}, Shape: {h,w}, TargetWeed: {target}, Prediction: {predicted_label}")
                 counter += 1
@@ -123,8 +132,7 @@ def main(cfg):
     # min_conf = int(task_config['min_confidence']*100)
     # max_conf = int(task_config['max_confidence']*100)
     
-    image_folders = []
-    
+    # image_folders = []
     # for folder in [ x.parts[-1] for x in Path(data_folder).iterdir() if x.is_dir()]:
     #     folder_parts = str(folder).split('_')
     #     print(folder_parts)
@@ -136,27 +144,23 @@ def main(cfg):
     # image_folder = image_folders[0]
     
     df = pd.concat([pd.read_csv(str(csv)) for csv in Path(data_folder).glob("*.csv")], ignore_index=True)
-    log.info(len(df))
     df = df[(df['PredictedTargetWeed'] == check_target_class) & (df['PredictedTargetWeed_Confidence'].between(min_conf, max_conf))]
-    log.info(len(df))
+    log.info(f"Starting with {len(df)} images")
     
+    cutout_ids = []
     for folder in [ x for x in Path(data_folder).iterdir() if x.is_dir()]:
-        print(folder)
-    exit()
-    # cutout_ids = [x.stem for x in image_folder.glob("*.jpg")]
-    # seed_csvs = [os.path.join(str(x), f"{x.stem}.csv") for x in batch_sample]
+        # print(folder)
+        cutout_ids.extend([x.stem for x in folder.glob("*.jpg")])
     
-    # log.info(f"Starting with {len(df)} images")
-
-    # remove already processed labels
-    # df still doesn't have any definition
     output_csvs = [x for x in Path(labels_folder).rglob("*.csv")]
     if output_csvs:
         labeled_df = pd.concat([pd.read_csv(csv) for csv in output_csvs], ignore_index=True)
+        log.info(f"length of labeled images: {len(labeled_df)}")
         df = df[~df["cutout_id"].isin(labeled_df["cutout_id"])]
     
-    # log.info(f"Processing {len(df)} images")
-    # image_viewer(df, image_folder, output_folder)
+    log.info(f"Processing {len(df)} images")
+    # log.info(df)
+    image_viewer(df, data_folder, labels_folder)
     
 
 if __name__ == "__main__":

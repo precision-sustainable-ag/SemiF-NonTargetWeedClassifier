@@ -42,7 +42,7 @@ predict:
 
 curate_labels:
   data_folder: predictions_test
-  labels_folder: labels_test/md_cover
+  labels_folder: label_test/md_cover
   check_target_class: False
   min_confidence: .15
   max_confidence: .35
