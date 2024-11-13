@@ -1,20 +1,24 @@
+import logging
 from ultralytics import YOLO
 
+log = logging.getLogger(__name__)
 
 def main(cfg):
     # Load a model
-    model = YOLO("yolo11n-cls.pt")  # load a pretrained model (recommended for training)
+    task_config = cfg['train']
+    print(task_config)
+    model = YOLO(task_config['pretrained_model_path'])  # load a pretrained model (recommended for training)
     
     # Train the model
     results = model.train(
-        data="data",
-        epochs=100,
-        patience=20,
-        batch=8,
-        imgsz=128,
-        workers=10,
-        project="runs/classify/MD_covers",
-        name="batch8_imgsz128_1392_n",
+        data=task_config['data'],
+        epochs=int(task_config['epochs']),
+        patience=int(task_config['patience']),
+        batch=int(task_config['batch']),
+        imgsz=int(task_config['imgsz']),
+        workers=int(task_config['workers']),
+        project=task_config['project'],
+        name=task_config['name'],
         # hsv_h=0.015,
         # hsv_s=0.7,
         # hsv_v=0.4,

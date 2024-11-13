@@ -11,8 +11,9 @@ defaults:
 tasks:
   # - label_images
   # - predict
-  - curate_labels
-  # - train
+  # - curate_labels
+  # - move_files
+  - train
 
 label_images:
   batch_prefix: MD
@@ -39,6 +40,18 @@ predict:
     3: non_target
   parallel_inference: True
   inference_batch_size: 256
+
+move_files:
+  labels_folder: label_test/md_cover
+  batch_prefix: MD
+  longterm_storage_locations:
+   - /mnt/research-projects/s/screberg/longterm_images/semifield-cutouts
+   - /mnt/research-projects/s/screberg/GROW_DATA/semifield-cutouts
+   - /home/psa_images/SemiF-AnnotationPipeline/data/semifield-cutouts
+  output_folder: data_test
+  test_size: 0.6
+  max_workers: 5
+  # labels used in determine_class?
 
 curate_labels:
   data_folder: predictions_test
