@@ -66,7 +66,8 @@ def image_viewer(df: pd.DataFrame, image_folder, output_folder):
     for _, row in df.iterrows():
         batch_id = row["batch_id"]
         image_name = row["cutout_id"] + ".jpg"
-        image_path = Path(image_folder, image_name)
+        image_path = Path(image_folder, batch_id, image_name)
+        
         image = cv2.imread(image_path)
         if image is None:
             continue
@@ -169,33 +170,38 @@ def main(cfg):
     
     log.info(f"{len(batch_sample)} batches used from {len(batches)} batches available")
     
-    # should go here since it's possible this is the first usage
+    seed_csvs = [os.path.join(str(x), f"{x.stem}.csv") for x in batch_sample]
+    df = pd.concat([pd.read_csv(csv) for csv in seed_csvs], ignore_index=True)
+    log.info(f"Starting with {len(df)} images")
+    
     data_folder.mkdir(exist_ok=True, parents=True)
     csvs = [x for x in data_folder.rglob("*.csv")]
     if csvs:
         # this codeblock gets all images from the first csv and keeps the cutouts if they are present in long term storage
-        cutout_ids = [x.stem for x in image_folder.glob("*.jpg")]
-        df = pd.read_csv([x for x in data_folder.glob("*.csv")][0])
-        df = df[df["cutout_id"].isin(cutout_ids)]
+        # cutout_ids = [x.stem for x in image_folder.glob("*.jpg")]
+        # df = pd.read_csv([x for x in data_folder.glob("*.csv")][0])
+        # df = df[df["cutout_id"].isin(cutout_ids)]
         
         # this removes cutouts from the dataframe if they are present in data_folder
         labeled_df = pd.concat([pd.read_csv(csv) for csv in csvs], ignore_index=True)
         df = df[~df["cutout_id"].isin(labeled_df["cutout_id"])]
+        log.info(f"Removed already labeled cutouts from processing")
+    
     
     log.info(f"Size of df before filtering: {len(df)}")
-    exit()
-
-    # df = filter_by_season(df, season)
-    # log.info(f"Size of df after filtering: {len(df)}")
-
-    # df = stratified_sample(df, n_samples_per_bin=20, max_bins=6)
-
-    # if len(df) == 0:
-    #     print("No images to process")
-    #     exit()
     
-    # log.info(f"Processing {len(df)} images")
-    # image_viewer(df, image_folder, data_folder)
+
+    df = filter_by_season(df, season)
+    log.info(f"Size of df after filtering: {len(df)}")
+
+    df = stratified_sample(df, n_samples_per_bin=20, max_bins=6)
+
+    if len(df) == 0:
+        print("No images to process")
+        exit()
+    
+    log.info(f"Processing {len(df)} images")
+    image_viewer(df, image_folder, data_folder)
 
 
 

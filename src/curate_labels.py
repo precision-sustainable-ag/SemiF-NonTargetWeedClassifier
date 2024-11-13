@@ -117,22 +117,36 @@ def main(cfg):
     # check ../predictions_test vs predictions_test
     data_folder = task_config['data_folder']
     labels_folder = task_config['labels_folder']
-    check_target_folder = task_config['check_target_class']
-    min_conf = int(task_config['min_confidence']*100)
-    max_conf = int(task_config['max_confidence']*100)
+    check_target_class = task_config['check_target_class']
+    min_conf = float(task_config['min_confidence'])
+    max_conf = float(task_config['max_confidence'])
+    # min_conf = int(task_config['min_confidence']*100)
+    # max_conf = int(task_config['max_confidence']*100)
     
     image_folders = []
-    for folder in [ x.parts[-1] for x in Path(data_folder).iterdir() if x.is_dir()]:
-        folder_parts = str(folder).split('_')
-        print(folder_parts)
-        if (check_target_folder and len(folder_parts) == 3) or (not check_target_folder and len(folder_parts) == 4):
-            if int(folder_parts[-2]) >= min_conf and int(folder_parts[-1]) <= max_conf:
-                image_folders.append(str(folder))
-        
-    log.info(f"Curating labels for images from {image_folders}")
-    image_folder = image_folders[0]
     
-    cutout_ids = [x.stem for x in image_folder.glob("*.jpg")]
+    # for folder in [ x.parts[-1] for x in Path(data_folder).iterdir() if x.is_dir()]:
+    #     folder_parts = str(folder).split('_')
+    #     print(folder_parts)
+    #     if (check_target_class and len(folder_parts) == 3) or (not check_target_class and len(folder_parts) == 4):
+    #         if int(folder_parts[-2]) >= min_conf and int(folder_parts[-1]) <= max_conf:
+    #             image_folders.append(str(folder))
+        
+    # log.info(f"Curating labels for images from {image_folders}")
+    # image_folder = image_folders[0]
+    
+    df = pd.concat([pd.read_csv(str(csv)) for csv in Path(data_folder).glob("*.csv")], ignore_index=True)
+    log.info(len(df))
+    df = df[(df['PredictedTargetWeed'] == check_target_class) & (df['PredictedTargetWeed_Confidence'].between(min_conf, max_conf))]
+    log.info(len(df))
+    
+    for folder in [ x for x in Path(data_folder).iterdir() if x.is_dir()]:
+        print(folder)
+    exit()
+    # cutout_ids = [x.stem for x in image_folder.glob("*.jpg")]
+    # seed_csvs = [os.path.join(str(x), f"{x.stem}.csv") for x in batch_sample]
+    
+    # log.info(f"Starting with {len(df)} images")
 
     # remove already processed labels
     # df still doesn't have any definition
@@ -155,6 +169,7 @@ if __name__ == "__main__":
 
     csvs = [x for x in data_folder.rglob("*.csv")]
     cutout_ids = [x.stem for x in image_folder.glob("*.jpg")]
+    
     df = pd.read_csv([x for x in data_folder.glob("*.csv")][0])
     df = df[df["cutout_id"].isin(cutout_ids)]
 

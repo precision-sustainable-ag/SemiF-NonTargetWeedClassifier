@@ -167,6 +167,7 @@ cython_debug/
 # data
 data/*
 labels/*
+label_test/*
 predictions/*
 predictions_test/*
 runs/*

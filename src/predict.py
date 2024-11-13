@@ -174,7 +174,6 @@ class BatchInferencePipeline:
     def run(self):
         self.processor.load_batches()
         df = self.processor.get_data()
-        
 
         if self.parallel_processing:
             log.info(f"Generating labels in parallel with batch size of {self.batch_size}, resulting in approximately { int(len(df)/self.batch_size) } batches")

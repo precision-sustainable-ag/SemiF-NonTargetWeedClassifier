@@ -5,6 +5,9 @@ hydra:
   # sweep:
   #   dir: main_dir
   #   subdir: ${hydra.job.name}
+defaults:
+  - _self_
+  - train: default
 tasks:
   # - label_images
   # - predict
