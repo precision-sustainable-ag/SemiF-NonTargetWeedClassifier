@@ -1,3 +1,6 @@
+"""
+Function to move files from longterm storage locations, and split it into train and validation datasets
+"""
 from pathlib import Path
 import pandas as pd
 import shutil
@@ -8,18 +11,24 @@ import os
 
 log = logging.getLogger(__name__)
 
-def determine_class(row):
-    if row["common_name"].lower() == "hairy vetch" and row["TargetWeed"]:
-        return "hairy vetch"
-    if row["TargetWeed"]:
-        return "grass" if row["group"].lower() == "monocot" else "broadleaf"
+def determine_class(row, reversed_mapping):
+    """
+    
+    reversed_mapping is common name -> classname mapping (eg: "crimson clover": "clover")
+    mapping in config.yaml is classname -> array of common name mapping (eg: "clover": ["crimson clover", "red clover"])
+    reversed_mapping reduces the computations needed at each step but mapping in config.yaml is easier to read
+    """
+    if row['common_name'].lower() in reversed_mapping.keys() and row['TargetWeed']:
+        return reversed_mapping[row['common_name'].lower()]
+    elif row['TargetWeed']:
+        return row['common_name'].lower()
     else:
         return "non_target"
-    
     
 # Helper function to copy a single image
 def copy_single_image(row, subset, dest, lts_locations):
     """Copy a single image based on the DataFrame row."""
+
     image_name = row["cutout_id"] + ".jpg"
     i = 0
     source = Path(os.path.join(lts_locations[i], row["batch_id"], image_name))
@@ -29,11 +38,6 @@ def copy_single_image(row, subset, dest, lts_locations):
             i+= 1
         else:
             break
-    # if not source.exists():
-    #     source = image_folder2 / row["batch_id"] / image_name
-
-    # if not source.exists():
-    #     source = image_folder3 / row["batch_id"] / image_name
 
     if source.exists():
         # targetweed = row["TargetWeed"]
@@ -60,12 +64,20 @@ def copy_images_parallel(df, subset, dest, lts_locations, max_workers):
                 print(f"Error copying image: {e}")
 
 def main(cfg):
+    """
+     Main function that uses the hydra config and moves files for training
+    """
     task_config = cfg['move_files']
     
     labels_folder = task_config['labels_folder']
     state_prefix = task_config['batch_prefix']
     image_folders = task_config['longterm_storage_locations']
     output_folder = task_config['output_folder']
+    common_name_mapping = task_config['common_name_grouping']
+    reversed_name_mapping = {}
+    for k, v in common_name_mapping.items():
+        for common_name in v:
+            reversed_name_mapping[common_name] = k
 
     output_csvs = [x for x in Path(labels_folder).rglob("*.csv")]
     df = pd.concat([pd.read_csv(csv) for csv in output_csvs], ignore_index=True)
@@ -76,7 +88,7 @@ def main(cfg):
     df = df[df["common_name"] != "unknown"]
     log.info(f"Total number of images: {len(df)}")
 
-    df["class"] = df.apply(determine_class, axis=1)
+    df["class"] = df.apply(determine_class, args=(reversed_name_mapping, ), axis=1)
 
     # Perform train/val split (80% train, 20% val)
     train_df, val_df = train_test_split(df, test_size=task_config['test_size'], stratify=df["class"], random_state=42)
@@ -96,49 +108,3 @@ def main(cfg):
     
     copy_images_parallel(train_df, "train", output_folder, image_folders, task_config['max_workers'])
     copy_images_parallel(val_df, "val", output_folder, image_folders, task_config['max_workers'])
-
-# Paths
-# image_folder1 = Path("/mnt/research-projects/s/screberg/longterm_images/semifield-cutouts")
-# image_folder2 = Path("/mnt/research-projects/s/screberg/GROW_DATA/semifield-cutouts")
-# image_folder3 = Path("/home/psa_images/SemiF-AnnotationPipeline/data/semifield-cutouts")
-# state_prefix = "MD"
-
-# label_csvs = Path("labels/md_covers").glob("*.csv")
-# dest = Path("data")  # Destination directory for copied images
-
-# # Load CSV data
-# dfs = [pd.read_csv(csv) for csv in label_csvs]
-# df = pd.concat(dfs, ignore_index=True)
-
-# # Filter rows based on batch prefix
-# df = df[df["batch_id"].str.contains(state_prefix)]
-# df = df.drop_duplicates(subset=["cutout_id"])
-# df = df[df["common_name"] != "unknown"]
-
-# print(f"Total number of images: {len(df)}")
-# # Create a new column for class
-
-
-# df["class"] = df.apply(determine_class, axis=1)
-# # Perform train/val split (80% train, 20% val)
-# train_df, val_df = train_test_split(df, test_size=0.1, stratify=df["class"], random_state=42)
-
-# print(f"Number of training images: {len(train_df)}")
-# print(f"Number of validation images: {len(val_df)}")
-# # print(f"Number of target weed train images: {train_df[train_df['class'] == True].shape[0]}")
-# print(f"Number of target weed grass train images: {train_df[train_df['class'] == 'grass'].shape[0]}")
-# print(f"Number of target weed broadleaf train images: {train_df[train_df['class'] == 'broadleaf'].shape[0]}")
-# print(f"Number of target weed hairy vetch train images: {train_df[train_df['class'] == 'hairy vetch'].shape[0]}")
-# print(f"Number of non-target weed train images: {train_df[train_df['class'] == 'non_target'].shape[0]}")
-# print(f"Number of target grass weed val images: {val_df[val_df['class'] == 'grass'].shape[0]}")
-# print(f"Number of target broadleaf weed val images: {val_df[val_df['class'] == 'broadleaf'].shape[0]}")
-# print(f"Number of target hairy vetch weed val images: {val_df[val_df['class'] == 'hairy vetch'].shape[0]}")
-# print(f"Number of non-target weed val images: {val_df[val_df['class'] == 'non_target'].shape[0]}")
-
-# # print(f"Number of non-target weed train images: {train_df[train_df['class'] == False].shape[0]}")
-# # print(f"Number of target weed val images: {val_df[val_df['class'] == True].shape[0]}")
-# # print(f"Number of non-target weed val images: {val_df[val_df['class'] == False].shape[0]}")
-
-# # Create 'train' and 'val' directories and copy images in parallel
-# copy_images_parallel(train_df, "train", dest)
-# copy_images_parallel(val_df, "val", dest)

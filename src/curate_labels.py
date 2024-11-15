@@ -1,3 +1,7 @@
+"""
+Function to manually look at labels that were auto-tagged using predict.py
+Used to maintain and inspect the integrity of the data being used for training
+"""
 import os
 from pathlib import Path
 import cv2
@@ -121,6 +125,9 @@ def image_viewer(df: pd.DataFrame, image_folder, output_folder):
     results.to_csv(output_csv, index=False)
 
 def main(cfg):
+    """
+    Main function that accepts hydra config and generates a set of images to curate
+    """
     task_config = cfg['curate_labels']
     
     # check ../predictions_test vs predictions_test
@@ -129,19 +136,6 @@ def main(cfg):
     check_target_class = task_config['check_target_class']
     min_conf = float(task_config['min_confidence'])
     max_conf = float(task_config['max_confidence'])
-    # min_conf = int(task_config['min_confidence']*100)
-    # max_conf = int(task_config['max_confidence']*100)
-    
-    # image_folders = []
-    # for folder in [ x.parts[-1] for x in Path(data_folder).iterdir() if x.is_dir()]:
-    #     folder_parts = str(folder).split('_')
-    #     print(folder_parts)
-    #     if (check_target_class and len(folder_parts) == 3) or (not check_target_class and len(folder_parts) == 4):
-    #         if int(folder_parts[-2]) >= min_conf and int(folder_parts[-1]) <= max_conf:
-    #             image_folders.append(str(folder))
-        
-    # log.info(f"Curating labels for images from {image_folders}")
-    # image_folder = image_folders[0]
     
     df = pd.concat([pd.read_csv(str(csv)) for csv in Path(data_folder).glob("*.csv")], ignore_index=True)
     df = df[(df['PredictedTargetWeed'] == check_target_class) & (df['PredictedTargetWeed_Confidence'].between(min_conf, max_conf))]
@@ -149,7 +143,6 @@ def main(cfg):
     
     cutout_ids = []
     for folder in [ x for x in Path(data_folder).iterdir() if x.is_dir()]:
-        # print(folder)
         cutout_ids.extend([x.stem for x in folder.glob("*.jpg")])
     
     output_csvs = [x for x in Path(labels_folder).rglob("*.csv")]
@@ -159,37 +152,5 @@ def main(cfg):
         df = df[~df["cutout_id"].isin(labeled_df["cutout_id"])]
     
     log.info(f"Processing {len(df)} images")
-    # log.info(df)
     image_viewer(df, data_folder, labels_folder)
-    
 
-if __name__ == "__main__":
-    
-    data_folder = Path("../predictions_test")
-    
-    # for all folders in data folders when they fall in range 
-    image_folder = Path(data_folder, "non_target_class_35_50")
-   
-
-    csvs = [x for x in data_folder.rglob("*.csv")]
-    cutout_ids = [x.stem for x in image_folder.glob("*.jpg")]
-    
-    df = pd.read_csv([x for x in data_folder.glob("*.csv")][0])
-    df = df[df["cutout_id"].isin(cutout_ids)]
-
-    # df = pd.concat([pd.read_csv(csv) for csv in csvs], ignore_index=True)
-    print(f"Size of df before filtering: {len(df)}")
-    
-    output_folder = Path("../labels/md_covers")
-    output_folder.mkdir(exist_ok=True, parents=True)
-
-    # Load all CSV files into a single DataFrame
-    output_csvs = [x for x in output_folder.glob("*.csv")]
-
-        
-    if output_csvs:
-        labeled_df = pd.concat([pd.read_csv(csv) for csv in output_csvs], ignore_index=True)
-        df = df[~df["cutout_id"].isin(labeled_df["cutout_id"])]
-
-    print(f"Processing {len(df)} images")
-    image_viewer(df, image_folder, output_folder)

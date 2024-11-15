@@ -1,13 +1,13 @@
 pretrained_model_path: yolo11n-cls.pt
 
 data: data_test
-epochs: 100
-patience: 20
-batch: 8
+epochs: 200
+patience: 50
+batch: 16
 imgsz: 128
 workers: 10
 project: runs_test/classify/MD_covers
-name: batch8_imgsz128_1392_n
+name: batch16_imgsz128_4279_n
 
 # hsv_h: 0.015
 # hsv_s: 0.7

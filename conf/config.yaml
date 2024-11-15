@@ -42,15 +42,31 @@ predict:
   inference_batch_size: 256
 
 move_files:
-  labels_folder: label_test/md_cover
+  labels_folder: label_test/md_covers
   batch_prefix: MD
   longterm_storage_locations:
    - /mnt/research-projects/s/screberg/longterm_images/semifield-cutouts
    - /mnt/research-projects/s/screberg/GROW_DATA/semifield-cutouts
    - /home/psa_images/SemiF-AnnotationPipeline/data/semifield-cutouts
   output_folder: data_test
-  test_size: 0.6
-  max_workers: 5
+  test_size: 0.1
+  max_workers: 20
+  # only for common names that need to be grouped, one-to-one mapping taken care of in code
+  common_name_grouping:
+    grass:
+      - cereal rye
+      - alfalfa
+      - maize
+    # hairy vetch:
+    #   - hairy vetch
+    # broadleaf:
+    #   - horseweed
+    # colorchecker:
+    #   - colorchecker
+    clover:
+      - crimson clover
+      - red clover
+
   # labels used in determine_class?
 
 curate_labels:

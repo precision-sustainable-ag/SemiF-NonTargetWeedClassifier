@@ -6,8 +6,14 @@ log = logging.getLogger(__name__)
 def main(cfg):
     # Load a model
     task_config = cfg['train']
-    print(task_config)
     model = YOLO(task_config['pretrained_model_path'])  # load a pretrained model (recommended for training)
+    
+    log.info(f"Started training script")
+    
+    
+    yolo_logger = logging.getLogger("ultralytics")
+    for handler in yolo_logger.handlers:
+        log.addHandler(handler)
     
     # Train the model
     results = model.train(
@@ -38,3 +44,6 @@ def main(cfg):
         # erasing=0.0,
         # crop_fraction=0.10,
         )
+    
+    for handler in yolo_logger.handlers:
+        log.removeHandler(handler)

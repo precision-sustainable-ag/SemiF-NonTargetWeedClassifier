@@ -1,3 +1,6 @@
+"""
+Function to manually label random set of images
+"""
 import os
 import logging
 from pathlib import Path
@@ -177,12 +180,6 @@ def main(cfg):
     data_folder.mkdir(exist_ok=True, parents=True)
     csvs = [x for x in data_folder.rglob("*.csv")]
     if csvs:
-        # this codeblock gets all images from the first csv and keeps the cutouts if they are present in long term storage
-        # cutout_ids = [x.stem for x in image_folder.glob("*.jpg")]
-        # df = pd.read_csv([x for x in data_folder.glob("*.csv")][0])
-        # df = df[df["cutout_id"].isin(cutout_ids)]
-        
-        # this removes cutouts from the dataframe if they are present in data_folder
         labeled_df = pd.concat([pd.read_csv(csv) for csv in csvs], ignore_index=True)
         df = df[~df["cutout_id"].isin(labeled_df["cutout_id"])]
         log.info(f"Removed already labeled cutouts from processing")
@@ -202,41 +199,3 @@ def main(cfg):
     
     log.info(f"Processing {len(df)} images")
     image_viewer(df, image_folder, data_folder)
-
-
-
-# if __name__ == "__main__":
-#     # Example usage
-#     batch_prefix = "MD"
-
-#     image_folder = Path("/mnt/research-projects/s/screberg/longterm_images/semifield-cutouts")
-#     # image_folder = Path("/mnt/research-projects/s/screberg/GROW_DATA/semifield-cutouts")
- 
-#     data_folder = Path("../labels/md_covers")
-#     csvs = [x for x in data_folder.rglob("*.csv")]
-#     cutout_ids = [x.stem for x in image_folder.glob("*.jpg")]
-#     df = pd.read_csv([x for x in data_folder.glob("*.csv")][0])
-#     df = df[df["cutout_id"].isin(cutout_ids)]
-
-    
-#     print(f"Size of df before filtering: {len(df)}")
-    
-#     data_folder.mkdir(exist_ok=True, parents=True)
-
-#     # Load all CSV files into a single DataFrame
-#     output_csvs = [x for x in data_folder.glob("*.csv")]
-
-        
-#     if output_csvs:
-#         labeled_df = pd.concat([pd.read_csv(csv) for csv in output_csvs], ignore_index=True)
-#         df = df[~df["cutout_id"].isin(labeled_df["cutout_id"])]
-
-#     df = filter_by_season(df, "cover")
-#     print(f"Size of df before filtering: {len(df)}")
-#     df = stratified_sample(df, n_samples_per_bin=20, max_bins=6)
-#     if len(df) == 0:
-#         print("No images to process")
-#         exit()
-    
-#     print(f"Processing {len(df)} images")
-#     image_viewer(df, image_folder, data_folder)
