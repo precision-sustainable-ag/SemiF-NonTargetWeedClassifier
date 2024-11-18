@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 
-def concatenate_csvs(folder_path, output_file):
+def concatenate_csvs(folder_path, output_file, batch_prefix):
     # List to hold dataframes
     dfs = []
 
@@ -16,13 +16,15 @@ def concatenate_csvs(folder_path, output_file):
     concatenated_df = pd.concat(dfs, ignore_index=True)
     concatenated_df.reset_index(drop=True, inplace=True)
     concatenated_df = concatenated_df.drop_duplicates(subset="cutout_id")
-    concatenated_df = concatenated_df[concatenated_df["batch_id"].str.contains("NC")]
+    concatenated_df = concatenated_df[concatenated_df["batch_id"].str.contains(batch_prefix)]
     concatenated_df = concatenated_df[concatenated_df["common_name"] != "unknown"]
 
     # Save the concatenated dataframe to a new CSV file
     concatenated_df.to_csv(output_file, index=False)
 
-if __name__ == "__main__":
-    folder_path = "/home/mkutuga/NonTargetWeed-Classifier-Labeler/labels"
-    output_file = "data.csv"
-    concatenate_csvs(folder_path, output_file)
+def main(cfg):
+    """
+    Main function that accepts hydra config
+    """
+    task_config = cfg['concat_labels']
+    concatenate_csvs(task_config['data_folder'], task_config['output_file'], task_config['batch_prefix'])

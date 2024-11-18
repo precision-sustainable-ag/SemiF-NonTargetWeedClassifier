@@ -12,8 +12,9 @@ tasks:
   # - label_images
   # - predict
   # - curate_labels
+  - concat_labels
   # - move_files
-  - train
+  # - train
 
 label_images:
   batch_prefix: MD
@@ -75,3 +76,8 @@ curate_labels:
   check_target_class: False
   min_confidence: .15
   max_confidence: .35
+
+concat_labels:
+  data_folder: /home/jbshah/SemiF-NonTargetWeedClassifier/labels/md_covers
+  output_file: /home/jbshah/SemiF-NonTargetWeedClassifier/data.csv
+  batch_prefix: MD
