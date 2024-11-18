@@ -12,7 +12,6 @@ tasks:
   # - label_images
   # - predict
   # - curate_labels
-  - concat_labels
   # - move_files
   # - train
 
