@@ -105,17 +105,6 @@ def main(cfg):
         else:
             log.info(f"Number of target weed {target_class} train images: {train_df[train_df['class'] == target_class].shape[0]}")
             log.info(f"Number of target weed {target_class} val images: {val_df[val_df['class'] == target_class].shape[0]}")
-        
-    # print(f"Number of target weed train images: {train_df[train_df['class'] == True].shape[0]}")
-
-    # log.info(f"Number of target weed grass train images: {train_df[train_df['class'] == 'grass'].shape[0]}")
-    # log.info(f"Number of target weed broadleaf train images: {train_df[train_df['class'] == 'broadleaf'].shape[0]}")
-    # log.info(f"Number of target weed hairy vetch train images: {train_df[train_df['class'] == 'hairy vetch'].shape[0]}")
-    # log.info(f"Number of non-target weed train images: {train_df[train_df['class'] == 'non_target'].shape[0]}")
-    # log.info(f"Number of target grass weed val images: {val_df[val_df['class'] == 'grass'].shape[0]}")
-    # log.info(f"Number of target broadleaf weed val images: {val_df[val_df['class'] == 'broadleaf'].shape[0]}")
-    # log.info(f"Number of target hairy vetch weed val images: {val_df[val_df['class'] == 'hairy vetch'].shape[0]}")
-    # log.info(f"Number of non-target weed val images: {val_df[val_df['class'] == 'non_target'].shape[0]}")
     
     copy_images_parallel(train_df, "train", output_folder, image_folders, task_config['max_workers'])
     copy_images_parallel(val_df, "val", output_folder, image_folders, task_config['max_workers'])
