@@ -166,8 +166,15 @@ cython_debug/
 
 # data
 data/*
+
 labels/*
 predictions/*
-predictions_test/*
 runs/*
 non_target_weeds/*
+hydra_logs/*
+
+# test locations
+data_test/*
+label_test/*
+predictions_test/*
+runs_test/*

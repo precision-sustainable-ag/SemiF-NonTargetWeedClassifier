@@ -1,0 +1,83 @@
+hydra:
+  run:
+    dir: hydra_logs/${now:%Y-%m-%d_%H_%M_%S}
+  # used for multi-runs -> maybe useful
+  # sweep:
+  #   dir: main_dir
+  #   subdir: ${hydra.job.name}
+defaults:
+  - _self_
+  - train: default
+tasks:
+  # - label_images
+  # - predict
+  # - curate_labels
+  # - move_files
+  # - train
+  # - concat_labels
+
+label_images:
+  batch_prefix: MD
+  image_folder: /mnt/research-projects/s/screberg/longterm_images/semifield-cutouts
+  start_date: 2022-10-12
+  end_date: 2023-05-20
+  sample_folder_count: 10
+  parent_output_folder: label_test
+  season: cover
+
+predict:
+  start_date: 2023-09-18
+  end_date: 2024-05-16
+  batch_prefix: MD
+  image_folder: /mnt/research-projects/s/screberg/longterm_images/semifield-cutouts
+  output_folder: predictions_test
+  sample_folder_count: 10
+  
+  model_path: runs/classify/MD_covers/batch8_imgsz128_1030_n/weights/best.pt
+  labels:
+    0: broadleaf
+    1: grass
+    2: hairy_vetch
+    3: non_target
+  parallel_inference: True
+  inference_batch_size: 256
+
+move_files:
+  labels_folder: label_test/md_covers
+  batch_prefix: MD
+  longterm_storage_locations:
+   - /mnt/research-projects/s/screberg/longterm_images/semifield-cutouts
+   - /mnt/research-projects/s/screberg/GROW_DATA/semifield-cutouts
+   - /home/psa_images/SemiF-AnnotationPipeline/data/semifield-cutouts
+  output_folder: data_test
+  test_size: 0.1
+  max_workers: 20
+  # only for common names that need to be grouped, one-to-one mapping taken care of in code
+  common_name_grouping:
+    grass:
+      - cereal rye
+      - alfalfa
+      - maize
+    # hairy vetch:
+    #   - hairy vetch
+    # broadleaf:
+    #   - horseweed
+    # colorchecker:
+    #   - colorchecker
+    clover:
+      - crimson clover
+      - red clover
+
+  # labels used in determine_class?
+
+curate_labels:
+  data_folder: predictions_test
+  labels_folder: label_test/md_cover
+  check_target_class: False
+  min_confidence: .15
+  max_confidence: .35
+
+concat_labels:
+  data_folder: /home/jbshah/SemiF-NonTargetWeedClassifier/labels/md_covers
+  output_file: /home/jbshah/SemiF-NonTargetWeedClassifier/data.csv
+  batch_prefix: MD
