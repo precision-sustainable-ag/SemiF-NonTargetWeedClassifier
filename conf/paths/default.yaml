@@ -1,0 +1,8 @@
+
+work_dir: ${hydra:runtime.cwd}
+
+output_folder: ${paths.work_dir}/results
+
+unique_common_names: ${paths.work_dir}/conf/unique_labels.csv
+
+image_folder: /mnt/research-projects/s/screberg

@@ -1,3 +1,12 @@
+# Local directories
+data_multi_class
+cover_labels
+data
+results
+archived_labels
+notebooks
+# sh scripts
+*.sh
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
