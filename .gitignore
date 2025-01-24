@@ -4,7 +4,6 @@ cover_labels
 data
 results
 archived_labels
-notebooks
 # sh scripts
 *.sh
 # Byte-compiled / optimized / DLL files
