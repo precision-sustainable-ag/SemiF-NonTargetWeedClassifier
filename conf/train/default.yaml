@@ -1,11 +1,12 @@
-pretrained_model_path: yolo11x-cls.pt
-# pretrained_model_path: runs/classify/MD_covers_multiclass/batch16_imgsz128_4700_l_full_aug/weights/last.pt
 
-data: multi_class_data
+model_size: n
+total_images: 3500
+data: data
+project: runs/classify/TX_covers_multiclass
 epochs: 200
 patience: 100
 batch: 16
 imgsz: 128
 workers: 12
-project: runs/classify/MD_covers_multiclass
-name: batch16_imgsz128_7000_x_full_aug
+pretrained_model_path: yolo11${train.model_size}-cls.pt
+name: batch${train.batch}_imgsz${train.imgsz}_${train.total_images}_n

@@ -13,6 +13,24 @@ import random
 
 log = logging.getLogger(__name__)
 
+def load_or_create_csv(output_csv):
+    """
+    Load existing CSV or create a new one if it doesn't exist.
+
+    Parameters:
+        output_csv (str): Path to the CSV file.
+
+    Returns:
+        pd.DataFrame: The DataFrame loaded from or initialized as the CSV.
+    """
+    if os.path.exists(output_csv):
+        log.info(f"Loading existing CSV: {output_csv}")
+        return pd.read_csv(output_csv)
+    else:
+        log.info(f"CSV does not exist. Creating a new one: {output_csv}")
+        return pd.DataFrame(columns=["batch_id", "cutout_id", "category_common_name", "cutarea", "area_bin", "TargetWeed"])
+
+
 def df_filter(df, image_folder):
     # Get list of images
     images = [Path(img).name for img in os.listdir(image_folder) if img.endswith(".jpg")]
@@ -29,7 +47,7 @@ def stratified_sample(df: pd.DataFrame, n_samples_per_bin=5, max_bins=10):
         max_bins (int): Number of the smallest bins to retain for sampling.
     """
     # Define logarithmic bins for the area
-    bins = np.logspace(np.log10(df["area"].min() + 1), np.log10(df["area"].max() + 1), num=10)
+    bins = np.logspace(np.log10(df["cutout_cropsarea"].min() + 1), np.log10(df["area"].max() + 1), num=10)
     df["area_bin"] = pd.cut(df["area"], bins=bins, labels=range(len(bins) - 1), duplicates="drop")
     
     # Select only the smallest bins
@@ -37,11 +55,43 @@ def stratified_sample(df: pd.DataFrame, n_samples_per_bin=5, max_bins=10):
     df = df[df["area_bin"].isin(smallest_bins)]
     
     # Perform stratified sampling across the filtered bins
-    sampled_df = df.groupby(["common_name", "area_bin"], group_keys=False).apply(
+    sampled_df = df.groupby(["category_common_name", "area_bin"], group_keys=False).apply(
         lambda x: x.sample(min(len(x), n_samples_per_bin))
     )
     return sampled_df
 
+class Sampler:
+    """
+    Handles stratified sampling of images by custom area categories.
+    """
+
+    def __init__(self, df, area_categories, n_samples_per_category):
+        self.df = df
+        self.area_categories = area_categories
+        self.n_samples_per_category = n_samples_per_category
+        self.selected_classes = area_categories.keys()
+
+    def stratified_sample(self):
+        """
+        Performs stratified sampling across custom area categories.
+        """
+        # Define a custom category based on area ranges
+        def categorize_area(area):
+            for category, (min_area, max_area) in self.area_categories.items():
+                if min_area <= area < max_area:
+                    return category
+            return None
+
+        # Apply the categorization to the DataFrame
+        self.df["area_category"] = self.df["cutout_props_bbox_area_cm2"].apply(categorize_area)
+        self.df = self.df[self.df["area_category"].notna()]  # Filter out rows not falling into any category
+        
+        final_df = self.df.groupby(["category_common_name", "area_category"], group_keys=False).apply(
+            lambda x: x.sample(min(len(x), self.n_samples_per_category))
+        )
+        final_df_sorted = final_df.sort_values(by=["cutout_props_bbox_area_cm2"])
+        # Perform stratified sampling
+        return  final_df_sorted 
 def get_dynamic_font_scale(image_height, image_width):
     """Dynamically adjust the font scale based on image size."""
     # Use smaller font for very small images and larger font for larger images
@@ -56,9 +106,12 @@ def get_dynamic_font_scale(image_height, image_width):
 
 
 def image_viewer(df: pd.DataFrame, image_folder, output_folder):
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    # Create DataFrame to store results
-    results = pd.DataFrame(columns=[x for x in df.columns] + ["TargetWeed"])
+    output_csv = os.path.join(output_folder, "image_classes.csv")
+    results = load_or_create_csv(output_csv)
+
+    # Filter out already labeled images
+    df = df[~df["cutout_id"].isin(results["cutout_id"])]
+    log.info(f"Processing {len(df)} images after removing already labeled ones.")
 
     # Create a single OpenCV window to reuse
     window_name = "Image Viewer"
@@ -85,12 +138,12 @@ def image_viewer(df: pd.DataFrame, image_folder, output_folder):
             image = cv2.resize(image, resize)
 
         # Overlay the `common_name` on the image
-        label = f"{row['common_name']}"
+        label = f"{row['category_common_name']}"
         predicted_label = None
         
         if "PredictedTargetWeed" in row:
             predicted_label = f"{row['PredictedTargetWeed']}"
-            label = row['common_name'] + "\n" + predicted_label
+            label = row['category_common_name'] + "\n" + predicted_label
         font = cv2.FONT_HERSHEY_SIMPLEX
         font_scale = get_dynamic_font_scale(h, w)
         color = (0, 255, 0)  # Green color
@@ -126,7 +179,7 @@ def image_viewer(df: pd.DataFrame, image_folder, output_folder):
                 # Concatenate the current result with the main results DataFrame
                 results = pd.concat([results, current_result], ignore_index=True)
                 # Save results to CSV
-                output_csv = os.path.join(output_folder, f"image_classes_{timestamp}.csv")
+                output_csv = os.path.join(output_folder, f"image_classes.csv")
                 results.to_csv(output_csv, index=False)
                 print(f"Counter: {counter}, Image: {image_name}, Shape: {h,w}, TargetWeed: {target}, Prediction: {predicted_label}")
                 counter += 1
@@ -191,7 +244,11 @@ def main(cfg):
     df = filter_by_season(df, season)
     log.info(f"Size of df after filtering: {len(df)}")
 
-    df = stratified_sample(df, n_samples_per_bin=20, max_bins=6)
+    area_categories = {
+        key: tuple(value) for key, value in cfg['filter']['area_categories'].items()
+    }
+    sampler = Sampler(df, area_categories, cfg['filter']['n_samples_per_category'])
+    df = sampler.stratified_sample()
 
     if len(df) == 0:
         print("No images to process")

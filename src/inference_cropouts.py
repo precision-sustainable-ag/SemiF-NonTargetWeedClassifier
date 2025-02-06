@@ -47,10 +47,10 @@ class CutoutInference:
         dest = self.output_path / batch_id
         dest.mkdir(exist_ok=True, parents=True)
 
-        shutil.move(img, dest)
-        shutil.move(croput_metadata_file, dest)
-        shutil.move(mask_file, dest)
-        shutil.move(cutout_file, dest)
+        shutil.copy(img, dest)
+        shutil.copy(croput_metadata_file, dest)
+        shutil.copy(mask_file, dest)
+        shutil.copy(cutout_file, dest)
 
 
     def run(self):
@@ -60,7 +60,7 @@ class CutoutInference:
 
 if __name__ == "__main__":
     MODEL_PATH = "runs/classify/NC_covers_grasses_binary/batch32_imgsz128_5468_n/weights/best.pt"
-    DATA_PATH = "/home/psa_images/SemiF-AnnotationPipeline/data/semifield-cutouts/"
+    DATA_PATH = "/mnt/research-projects/s/screberg/GROW_DATA/semifield-cutouts/NC_2022-06-27"
     OUTPUT_PATH = "non_target_weeds"
 
     LABEL_MAP = {

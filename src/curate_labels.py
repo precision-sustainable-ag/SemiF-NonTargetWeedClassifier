@@ -1,156 +1,220 @@
-"""
-Function to manually look at labels that were auto-tagged using predict.py
-Used to maintain and inspect the integrity of the data being used for training
-"""
-import os
 from pathlib import Path
 import cv2
 import pandas as pd
-from datetime import datetime  # Import for timestamp
 import numpy as np
 from tqdm import tqdm
 import random
-import logging
+import re
+import json
 
-log = logging.getLogger(__name__)
+class ImageDataLoader:
+    """
+    Loads and filters image data from CSV files based on configuration settings.
+    """
+
+    def __init__(self, cfg):
+        self.cfg = cfg
+        self.validated = cfg.filter.validated
+        self.non_target_classes = cfg.curate.non_target_classes
+
+        self.output_folder = Path(cfg.paths.output_folder)
+        self.output_folder.mkdir(parents=True, exist_ok=True)
+        self.df = None
+
+    def load_csv(self):
+        csv_path = Path(self.output_folder, "image_classes.csv")
+        self.df = pd.read_csv(csv_path)
+        
+        if self.validated:
+            self.df = self.df[self.df["validated"] == True]
+        
+        if self.df.empty:
+            raise ValueError("No validated images found in the specified date range.")
+        
+        self.df = self.df[self.df["non_target_weed_class"].apply(lambda x: any(plant_class in x for plant_class in self.non_target_classes))]
+
+    def get_data(self):
+        """Returns the filtered DataFrame."""
+        return self.df
 
 
-def get_dynamic_font_scale(image_height, image_width):
-    """Dynamically adjust the font scale based on image size."""
-    # Use smaller font for very small images and larger font for larger images
-    min_dim = min(image_height, image_width)
+class ImageViewer:
+    """
+    Displays images with labels and allows user to classify them.
+    """
+
+    def __init__(self,cfg, df, class_labels):
+        self.cfg = cfg
     
-    if min_dim < 100:
-        return 0.3  # Small font for very small images
-    elif min_dim < 500:
-        return 0.5  # Medium font for moderate-size images
-    else:
-        return 1.5  # Larger font for larger images
+        self.lts_dir = cfg.paths.image_folder
+        self.output_folder = Path(cfg.paths.output_folder)
+        self.results = df
+        self.class_labels = class_labels
+        self.window_name = "Image Viewer"
+        cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
+        cv2.setWindowProperty(self.window_name, cv2.WND_PROP_TOPMOST, 1)
+        self.developed_image_cache = {}
+        self.metadata_cache = {}
 
-def get_folder_name(confidence_score, check_target_class):
-    conf_ranges = [(0.85, 0.95), (0.65, 0.85), (0.5, 0.65), (0.35, 0.5), (0.15, 0.35), (0, 0.15)]
-    for lower, upper in conf_ranges:
-        if lower <= confidence_score < upper:
-            target_type = "non_target" if not check_target_class else "target"
-            return f"{target_type}_class_{int(lower*100)}_{int(upper*100)}"
+    
+    @staticmethod
+    def get_dynamic_font_scale(image_height, image_width):
+        """Calculates a dynamic font scale based on image dimensions."""
+        min_dim = min(image_height, image_width)
+        return 0.3 if min_dim < 100 else 0.5 if min_dim < 500 else 1.5
 
-def image_viewer(df: pd.DataFrame, image_folder, output_folder):
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    # Create DataFrame to store results
-    results = pd.DataFrame(columns=[x for x in df.columns] + ["TargetWeed"])
-
-    # Create a single OpenCV window to reuse
-    window_name = "Image Viewer"
-    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-    cv2.setWindowProperty(window_name, cv2.WND_PROP_TOPMOST, 1)  # Keep window on top
-    counter = 0
-    # Main loop to process images
-    for _, row in df.iterrows():
-        batch_id = row["batch_id"]
-        image_name = row["cutout_id"] + ".jpg"
-        folder_name = get_folder_name(row["PredictedTargetWeed_Confidence"], row["PredictedTargetWeed"])
-        log.info(f"Folder name: {folder_name}")
-        image_path = Path(image_folder, folder_name, image_name)
-        image = cv2.imread(image_path)
-        if image is None:
-            continue
-
-        # Resize image if necessary
-        h, w = image.shape[:2]
-        if h > 500 or w > 500:
-            resize = (image.shape[1] // 3, image.shape[0] // 3)
-            image = cv2.resize(image, resize)
-        elif h < 500 or w < 500:
-            resize = (image.shape[1] * 3, image.shape[0] * 3)
-            image = cv2.resize(image, resize)
-
-        # Overlay the `common_name` on the image
-        label = f"{row['common_name']}"
-        predicted_label = None
+    def read_json(self, developed_metadata_path):
+        """Reads the JSON file and returns the data."""
+        with open(developed_metadata_path) as f:
+            return json.load(f)
         
-        if "PredictedTargetWeed" in row:
-            predicted_label = f"{row['PredictedTargetWeed']}"
-            label = row['common_name'] + "\n" + predicted_label
-        font = cv2.FONT_HERSHEY_SIMPLEX
-        font_scale = get_dynamic_font_scale(h, w)
-        color = (0, 255, 0)  # Green color
-        thickness = max(1, int(font_scale * 2))  # Adjust thickness based on font size
-        position = (10, 30)  # Top-left corner of the image
+    def display_images(self, show_developed=False):
+        """
+        Displays images, allowing user to classify them using keyboard inputs.
 
-        if "PredictedTargetWeed" in row:
-            for idx, line in enumerate(label.split("\n")):
-                position = (10, 30 + idx * 30)
-                # Add the label to the image
-                cv2.putText(image, line, position, font, font_scale, color, thickness, cv2.LINE_AA)
-        else:
-            cv2.putText(image, label, position, font, font_scale, color, thickness, cv2.LINE_AA)
-
-        valid_input = False
+        Args:
+            show_developed (bool): If True, displays the developed image alongside the cutout.
+        """
+        key_mapping = {ord(k): v for k, v in self.class_labels.items()}
         
-        output_csv = os.path.join(output_folder, f"image_classes_{timestamp}.csv")
-        while not valid_input:
-            # Display the image with the label in the same window
-            cv2.imshow(window_name, image)
-            key = cv2.waitKey(0)
-
-            # Check for valid rating input (1-9 keys correspond to 49-57 ASCII values)
-            if 49 <= key <= 50:
-                if key == 49:
-                    target  = True
-                elif key == 50:
-                    target = False
+        # print all the possible key options
+        print("\nPress 'b' to go back to the previous image.")
+        print("Press 'q' to quit the program.")
+        print("Press 'p' to toggle displaying the developed image.\n")
+        # print the possible key mappings
+        for key, value in key_mapping.items():
+            print(f"\t'{chr(key)}' : {value}")
+        print("\n")
+        viewed_stack = []  # Stack to store previously viewed rows
+        current_index = 0
+        
+        with tqdm(total=len(self.results), desc="Labeling Images", unit="image") as progress_bar:
+            while current_index < len(self.results):
+                row = self.results.iloc[current_index]
+                image_dir = Path(self.lts_dir, "GROW_DATA", "semifield-cutouts", row["batch_id"])
+                developed_image_dir = Path(self.lts_dir, "GROW_DATA", "semifield-developed-images", row["batch_id"], "images")
+                developed_metadata_dir = Path(self.lts_dir, "GROW_DATA", "semifield-developed-images", row["batch_id"], "metadata")
                 
-                current_result = pd.DataFrame(row).T
-                current_result["TargetWeed"] = target
+                if not image_dir.exists():
+                    image_dir = Path(self.lts_dir, "longterm_images", "semifield-cutouts", row["batch_id"])
+                if not developed_image_dir.exists():
+                    developed_image_dir = Path(self.lts_dir, "longterm_images", "semifield-developed-images", row["batch_id"], "images")
+                    developed_metadata_dir = Path(self.lts_dir, "longterm_images", "semifield-developed-images", row["batch_id"], "metadata")
 
+                image_path = Path(image_dir, f"{row['cutout_id']}.jpg")
+                developed_image_path = Path(developed_image_dir, f"{row['image_id']}.jpg")
+                developed_metadata_path = Path(developed_metadata_dir, f"{row['image_id']}.json")
 
-                # Concatenate the current result with the main results DataFrame
-                results = pd.concat([results, current_result], ignore_index=True)
-                # Save results to CSV
-                
-                results.to_csv(output_csv, index=False)
-                print(f"Counter: {counter}, Image: {image_name}, Shape: {h,w}, TargetWeed: {target}, Prediction: {predicted_label}")
-                counter += 1
-                valid_input = True
+                cutout_image = cv2.imread(str(image_path))
+                if cutout_image is None:
+                    current_index += 1
+                    continue
 
-            # Close the program if 'q' is pressed (optional)
-            elif key == ord('q'):
-                cv2.destroyAllWindows()
-                return  # Exit the function early if 'q' is pressed
+                cutout_image = cv2.resize(cutout_image, (300, 300))
+                cropped_image = None
+                display_with_developed = show_developed  # Use the default setting initially
 
-    # Close the window after processing all images
-    cv2.destroyAllWindows()
+                while True:
+                    # Dynamically create combined image based on the current setting
+                    if display_with_developed:
+                        if row["image_id"] in self.metadata_cache:
+                            metadata = self.metadata_cache[row["image_id"]]
+                        else:
+                            metadata = self.read_json(developed_metadata_path)
+                            self.metadata_cache[row["image_id"]] = metadata
 
-    # Save results to CSV
-    results.to_csv(output_csv, index=False)
+                        if row["image_id"] in self.developed_image_cache:
+                            developed_image = self.developed_image_cache[row["image_id"]]
+                        else:
+                            developed_image = cv2.imread(str(developed_image_path))
+                            if developed_image is None:
+                                current_index += 1
+                                break
+                            self.developed_image_cache[row["image_id"]] = developed_image
+
+                        bbox = next((ann["bbox_xywh"] for ann in metadata["annotations"] if ann["cutout_id"] == row["cutout_id"]), None)
+                        if bbox:
+                            original_width, original_height = metadata["exif_meta"]["ImageWidth"], metadata["exif_meta"]["ImageLength"]
+
+                            x, y, w, h = bbox
+                            padding = 1000  # Pixels of context around the bounding box
+
+                            # Add padding while ensuring we stay within image bounds
+                            x1 = max(0, int(x - padding))
+                            y1 = max(0, int(y - padding))
+                            x2 = min(original_width, int(x + w + padding))
+                            y2 = min(original_height, int(y + h + padding))
+                            # Crop the developed image
+                            cropped_image = developed_image[y1:y2, x1:x2]
+
+                            # Resize the cropped image for display
+                            cropped_image = cv2.resize(cropped_image, (400, 400))
+                            # Draw bounding box on the cropped image
+                            box_x = int((x - x1) * (400 / (x2 - x1)))
+                            box_y = int((y - y1) * (400 / (y2 - y1)))
+                            box_w = int(w * (400 / (x2 - x1)))
+                            box_h = int(h * (400 / (y2 - y1)))
+                            cv2.rectangle(cropped_image, (box_x, box_y), (box_x + box_w, box_y + box_h), (0, 0, 255), 2)
+                        else:
+                            cropped_image = np.ones((400, 400, 3), dtype=np.uint8) * 255  # Blank image if bbox is missing
+
+                        # Combine cutout and developed images
+                        combined_height = max(cutout_image.shape[0], cropped_image.shape[0])
+                        combined_width = cutout_image.shape[1] + cropped_image.shape[1]
+                        combined_image = np.ones((combined_height, combined_width, 3), dtype=np.uint8) * 255
+                        combined_image[:cutout_image.shape[0], :cutout_image.shape[1]] = cutout_image
+                        combined_image[:cropped_image.shape[0], cutout_image.shape[1]:] = cropped_image
+                    else:
+                        combined_image = cutout_image
+
+                    font_scale = self.get_dynamic_font_scale(300, 300)
+                    text = f"non_t: {row['non_target_weed_class']}\ncname: {row['category_common_name']}"
+                    for idx, line in enumerate(text.split("\n")):
+                        cv2.putText(combined_image, line, (10, 15 + idx * 30), cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0, 0, 255), 2)
+                    # cv2.putText(combined_image,text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0, 255, 0), 2)
+
+                    cv2.imshow(self.window_name, combined_image)
+                    key = cv2.waitKey(0)
+
+                    if key in key_mapping:
+                        # Update the `non_target_weed_class` directly in the DataFrame
+                        self.results.loc[self.results["cutout_id"] == row["cutout_id"], "non_target_weed_class"] = key_mapping[key]
+
+                        self.save_results()
+                        viewed_stack.append(current_index)
+                        current_index += 1
+                        progress_bar.update(1)
+                        break
+
+                    elif key == ord('b'):
+                        if viewed_stack:
+                            progress_bar.n -= 1
+                            progress_bar.refresh()
+                            current_index = viewed_stack.pop()
+                            break
+                        else:
+                            print("No previous images to go back to.")
+                    elif key == ord('q'):
+                        cv2.destroyAllWindows()
+                        return
+                    elif key == ord('p'):
+                        # Toggle displaying the developed image temporarily
+                        display_with_developed = not display_with_developed
+
+    def save_results(self):
+        """Saves the classification results to a CSV file."""
+        self.results.to_csv(self.output_folder / f"image_classes.csv", index=False)
+
 
 def main(cfg):
-    """
-    Main function that accepts hydra config and generates a set of images to curate
-    """
-    task_config = cfg['curate_labels']
-    
-    # check ../predictions_test vs predictions_test
-    data_folder = task_config['data_folder']
-    labels_folder = task_config['labels_folder']
-    check_target_class = task_config['check_target_class']
-    min_conf = float(task_config['min_confidence'])
-    max_conf = float(task_config['max_confidence'])
-    
-    df = pd.concat([pd.read_csv(str(csv)) for csv in Path(data_folder).glob("*.csv")], ignore_index=True)
-    df = df[(df['PredictedTargetWeed'] == check_target_class) & (df['PredictedTargetWeed_Confidence'].between(min_conf, max_conf))]
-    log.info(f"Starting with {len(df)} images")
-    
-    cutout_ids = []
-    for folder in [ x for x in Path(data_folder).iterdir() if x.is_dir()]:
-        cutout_ids.extend([x.stem for x in folder.glob("*.jpg")])
-    
-    output_csvs = [x for x in Path(labels_folder).rglob("*.csv")]
-    if output_csvs:
-        labeled_df = pd.concat([pd.read_csv(csv) for csv in output_csvs], ignore_index=True)
-        log.info(f"length of labeled images: {len(labeled_df)}")
-        df = df[~df["cutout_id"].isin(labeled_df["cutout_id"])]
-    
-    log.info(f"Processing {len(df)} images")
-    image_viewer(df, data_folder, labels_folder)
+    data_loader = ImageDataLoader(cfg)
+    data_loader.load_csv()
 
+    df = data_loader.get_data()
+    if df.empty:
+        print("No images to process.")
+        return
+
+    print(f"Loaded {len(df)} images.")
+    viewer = ImageViewer(cfg, df, cfg.filter.class_labels)
+    viewer.display_images(show_developed=cfg.filter.show_developed)

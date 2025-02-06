@@ -2,8 +2,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from pathlib import Path
 # Load the uploaded CSV file to inspect its contents
-name = "batch32_imgsz128_5468_n"
-file_path = Path(f"runs/classify/NC_covers_grasses_binary/{name}/results.csv")
+name = "batch16_imgsz128_7000_l_full_aug"
+file_path = Path(f"runs/classify/MD_covers_multiclass/{name}/results.csv")
 data = pd.read_csv(file_path)
 
 # Extract data for plotting

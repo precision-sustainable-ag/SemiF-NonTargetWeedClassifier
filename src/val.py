@@ -1,14 +1,17 @@
 from ultralytics import YOLO
-
+from pathlib import Path
 # Load a model
-name = "batch32_imgsz128_5468_n"
-model = YOLO(f"runs/classify/NC_covers_grasses_binary/{name}/weights/best.pt")  # load a custom model
+name = "16_imgsz128_3500_n"
+model_path = Path(f"runs/classify/TX_covers_multiclass/{name}/weights/best.pt")
+data_dir = Path("data")
+
+model = YOLO(model_path)  # load a custom model
 
 # Validate the model
 metrics = model.val(
-    data="data",
+    data=data_dir,
     imgsz=128,
-    batch=32,
-    project="runs/classify/NC_covers_grasses_binary/val",
-    name=f"{name}"
+    batch=16,
+    project=model_path.parent.parent,
+    name=f"val"
 )  # no arguments needed, dataset and settings remembered

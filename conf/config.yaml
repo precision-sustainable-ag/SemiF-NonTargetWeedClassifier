@@ -10,7 +10,8 @@ defaults:
   - train: default
   - paths: default
 tasks:
-  - label_images
+  # - label_images
+  - class_specific_labeler
   # - predict
   # - curate_labels
   # - move_files
@@ -45,15 +46,15 @@ predict:
   inference_batch_size: 256
 
 move_files:
-  labels_folder: label_test/md_covers
-  batch_prefix: MD
+  labels_folder: results
+  batch_prefix: TX
   longterm_storage_locations:
    - /mnt/research-projects/s/screberg/longterm_images/semifield-cutouts
    - /mnt/research-projects/s/screberg/GROW_DATA/semifield-cutouts
    - /home/psa_images/SemiF-AnnotationPipeline/data/semifield-cutouts
-  output_folder: data_test
-  test_size: 0.1
-  max_workers: 20
+  output_folder: data
+  test_size: 0.15
+  max_workers: 16
   # only for common names that need to be grouped, one-to-one mapping taken care of in code
   common_name_grouping:
     grass:
@@ -72,27 +73,27 @@ move_files:
 
   # labels used in determine_class?
 
-curate_labels:
-  data_folder: data/train/non_target
-  labels_folder: md_cover_labels
-  check_target_class: False
-  min_confidence: .15
-  max_confidence: .35
-
 concat_labels:
   data_folder: /home/jbshah/SemiF-NonTargetWeedClassifier/labels/md_covers
   output_file: /home/jbshah/SemiF-NonTargetWeedClassifier/data.csv
   batch_prefix: MD
 
-filter:
+curate:
+  non_target_classes: # class to target for relabeling
+    - non_target
+
+filter: # for class_specific_labeler.py
   storage: longterm_images # GROW_DATA or longterm_images
-  batch_prefix: TX
+  batch_prefix: NC
   start_date: 2022-10-12
-  end_date: 2024-04-20
+  end_date: 2022-10-31
   sample_size: 20
   plant_classes: # include only these classes. Must be in "common names"
     # - radish
-    - mustard 
+    # - mustard 
+    - oats
+    # - rye
+    # - colorchecker
   validated: false
   season_keyword: cover
   
@@ -101,6 +102,7 @@ filter:
     s: grass
     d: broadleaf
     f: colorchecker
+    g: flower-seed broadleaf
 
   # ['Black Oats', 'Cereal Rye', 'Colorchecker', 'Cultivated Radish', 'Mustards', 'Oats', 'Unknown']
   show_developed: false
@@ -108,12 +110,12 @@ filter:
   n_samples_per_category: 100
   
   area_categories:
-    # very_small: [0, 0.1]
+    very_small: [0, 0.1]
     small: [0.1, 1]
-    # medium: [1, 10]
-    # medium_large: [10, 100]
-    # large: [100, 1000]
-    # very_large: [1000, 1000000]
+    medium: [1, 10]
+    medium_large: [10, 100]
+    large: [100, 1000]
+    very_large: [1000, 1000000]
   
   # class_labels: # for covers MD
   #   a: non_target

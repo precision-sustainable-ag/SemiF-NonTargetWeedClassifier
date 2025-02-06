@@ -41,7 +41,7 @@ def copy_single_image(row, subset, dest, lts_locations):
 
     if source.exists():
         # targetweed = row["TargetWeed"]
-        targetweed = row["class"]
+        targetweed = row["non_target_weed_class"]
         # Set the target folder based on class and subset (train/val)
         # target_folder = dest / subset / ("target_grass" if targetweed else "non_target")
         target_folder = Path(os.path.join(dest, subset, targetweed))
@@ -73,38 +73,39 @@ def main(cfg):
     state_prefix = task_config['batch_prefix']
     image_folders = task_config['longterm_storage_locations']
     output_folder = task_config['output_folder']
-    common_name_mapping = task_config['common_name_grouping']
-    reversed_name_mapping = {}
-    for k, v in common_name_mapping.items():
-        for common_name in v:
-            reversed_name_mapping[common_name] = k
+    # common_name_mapping = task_config['common_name_grouping']
+    # reversed_name_mapping = {}
+    # for k, v in common_name_mapping.items():
+    #     for common_name in v:
+    #         reversed_name_mapping[common_name] = k
 
-    output_csvs = [x for x in Path(labels_folder).rglob("*.csv")]
-    df = pd.concat([pd.read_csv(csv) for csv in output_csvs], ignore_index=True)
+    # output_csvs = [x for x in Path(labels_folder).glob("*.csv")]
+    # df = pd.concat([pd.read_csv(csv) for csv in output_csvs], ignore_index=True)
+    df = pd.read_csv(Path(labels_folder) / "image_classes.csv")
+    # convert all non_target_weed_class that are "flower/seed broadleaf" to "flower_seed_broadleaf"
+    df['non_target_weed_class'] = df['non_target_weed_class'].apply(lambda x: x.replace("/", "_"))
     log.info(f"Starting off with {len(df)} labels across all locations")
 
     df = df[df["batch_id"].str.contains(state_prefix)]
     df = df.drop_duplicates(subset=["cutout_id"])
-    df = df[df["common_name"] != "unknown"]
+    df = df[df["category_common_name"] != "unknown"]
     log.info(f"Total number of images: {len(df)}")
 
-    df["class"] = df.apply(determine_class, args=(reversed_name_mapping, ), axis=1)
-
     # Perform train/val split (80% train, 20% val)
-    train_df, val_df = train_test_split(df, test_size=task_config['test_size'], stratify=df["class"], random_state=42)
+    train_df, val_df = train_test_split(df, test_size=task_config['test_size'], stratify=df["non_target_weed_class"], random_state=42)
     # train_df = val_df = df
 
     log.info(f"Number of training images: {len(train_df)}")
     log.info(f"Number of validation images: {len(val_df)}")
     
     # using class in df instead of common_name_mapping since not all common_names have a class mapping
-    for target_class in list(train_df['class'].unique()):
+    for target_class in list(train_df['non_target_weed_class'].unique()):
         if target_class == 'non_target':
-            log.info(f"Number of non-target weed train images: {train_df[train_df['class'] == 'non_target'].shape[0]}")
-            log.info(f"Number of non-target weed val images: {val_df[val_df['class'] == 'non_target'].shape[0]}")
+            log.info(f"Number of non-target weed train images: {train_df[train_df['non_target_weed_class'] == 'non_target'].shape[0]}")
+            log.info(f"Number of non-target weed val images: {val_df[val_df['non_target_weed_class'] == 'non_target'].shape[0]}")
         else:
-            log.info(f"Number of target weed {target_class} train images: {train_df[train_df['class'] == target_class].shape[0]}")
-            log.info(f"Number of target weed {target_class} val images: {val_df[val_df['class'] == target_class].shape[0]}")
+            log.info(f"Number of target weed {target_class} train images: {train_df[train_df['non_target_weed_class'] == target_class].shape[0]}")
+            log.info(f"Number of target weed {target_class} val images: {val_df[val_df['non_target_weed_class'] == target_class].shape[0]}")
     
     copy_images_parallel(train_df, "train", output_folder, image_folders, task_config['max_workers'])
     copy_images_parallel(val_df, "val", output_folder, image_folders, task_config['max_workers'])
